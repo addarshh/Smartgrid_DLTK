@@ -116,7 +116,7 @@ class SplunkDataModel:
         self.splk_query = self.splk_query + timing_splk
         print(self.splk_query)
 
-        self.splk_url = "https://ah-1170346-001.sdi.corp.bankofamerica.com:8089/services/search/jobs/export"
+        self.splk_url = "https://ah-1170346-001.sdi.corp.bankof.com:8089/services/search/jobs/export"
         self.fetch_data('flaps_dashboard', concatenate=concatenate)
         return
 
