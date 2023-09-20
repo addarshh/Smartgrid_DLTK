@@ -1,0 +1,170 @@
+Preprocessing:
+  master_df:
+    filepaths:
+      normalizer_yml: basepath/data/yaml/normalized_data_config.yml
+      raw_data_dir: basepath/data/fc/train_input/phase2/
+      save_data_dir: basepath/data/fc/train_output
+      device_lookup_files: cmdb_info_ion3k.csv
+      syslog_data_files: syslog_data_ion3k.csv
+      master_df_file: master_df.csv
+      remedy_inc_file: remedy_incident_data_ion3k.csv
+      remedy_labels_file: direct_use_labels.csv
+      remedy_associations_file: remedy_associations.csv
+      user_label_dir: basepath/data/fc/train_input/phase2/feedback_data_ion3k.csv
+
+    parameters:
+      type: ion3k
+      user_label: false
+      remedy_window: 7200
+
+    fields:
+      normalized_fields:
+        - device_type
+        - timestamp
+        - device_name
+        - event_policy_name
+        - severity
+        - event_id
+        - date_hour
+        - date_mday
+        - date_month
+        - host
+        - location
+        - ip_address
+
+      master_df_fields:
+        - device_type
+        - timestamp
+        - device_name
+        - event_policy_name
+        - severity
+        - event_id
+        - location
+        - ip_address
+        - 'USEFUL?'
+        - 'ACTIONABLE?'
+        - 'IS_REMEDY'
+        - 'IS_LOR'
+        - 'INCIDENT_NUMBER'
+        - submit_et
+        - epoch_time
+        - ip_group
+        - city_code
+        - first_occurrence
+
+  feature_df:
+    filepaths:
+      raw_data_dir: basepath/data/fc/train_input/phase2/
+      pso_dir: basepath/data/fc/train_output
+      train_master_data_dir: latest
+      train_pso_data_dir: latest
+      master_df_file: master_df.csv
+      timezone_lookup_file: us-zip-code-latitude-and-longitude.csv
+      swarm_file: swarm_label.csv
+      data_dir:  basepath/data/fc/train_output
+      catboost_encoder_file: catboost_encoder.pkl
+      feature_df_file: feature_df.csv
+
+    parameters:
+      backward_rolling_windows:
+        - 300
+        - 1800
+        - 4500
+      backward_sequence_window: 4500
+      backward_single_event_window: 4500
+      forward_rolling_windows:
+        - 300
+      forward_sequence_window: 300
+      forward_single_event_window: 300
+      ts_target: USEFUL?
+
+    fields:
+      num_feature:
+        - severity
+      cat_features:
+        - event_policy_name
+        - severity
+
+HyperTicketing:
+  train_hyper_ticket:
+    filepaths:
+      master_df_folder_dir: latest
+      master_df_name: master_df.csv
+      saved_model_path: basepath/data/fc/train_output
+
+    parameters:
+      eval_beta: 1
+      init_pos:
+      - 5
+      - 5
+      max_iteration: 2
+      min_max: 10
+      num_par: 15
+      penalty: 0.02
+      pso_bound:
+        1st dim:
+        - -10
+        - 10
+        2nd dim:
+        - -10
+        - 10
+      pso_params:
+      - 1
+      - 1
+      - 1.5
+      range_of_time:
+      - 1800
+      - 36000
+      - 1800
+
+SmartPriority:
+  train_smart_priority:
+    filepaths:
+      saved_swarm_dir: basepath/data/fc/train_output
+      saved_swarm_folder_dir: latest
+      save_output_dir: basepath/data/fc/train_output
+
+    parameters:
+      classification_model_param_dict:
+        learning_rate: 0.1
+        max_depth: 8
+        n_estimators: 2000
+      classification_threshold: 0.7
+      post_feature: true
+      predict_var: USEFUL?
+      preprocess_method: minmax
+      preprocess_nmax: 1
+      preprocess_nmin: -1
+
+Postprocessing:
+  post_proc:
+    filepaths:
+      classification_model_output_name: model_output.csv
+      classification_pipeline_output_folder_dir: basepath/data/fc/train_output/
+      master_file_name: master_df.csv
+      prediction_folder_dir: basepath/data/fc/predict_input/
+      training_data_dir: basepath/data/fc/train_output/
+      training_folder_dir: latest
+
+    parameters:
+      from_training: true
+      rewrite: true
+      streaming_to_index: false
+
+    fields:
+      master_col:
+        - event_id
+        - location
+        - device_name
+        - severity
+        - event_policy_name
+        - timestamp
+        - message
+
+      output_col:
+        - event_id
+        - Useful_pred
+        - Useful_prob
+        - group_label
+        - Group_Useful_pred
+        - test

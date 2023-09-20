@@ -1,0 +1,10 @@
+"""
+earliest="-24h" latest="now"
+index=ti-p_syslog
+host=*dsr00* OR host=*cpr00* OR
+host=*csr00* OR host=*hts00* OR
+host=*ibm00* OR host=*msr00* OR
+host=*obe00* OR host=*crr00* OR host=*dfr00*
+| rex field=host "^(?<device_name>\S+).network" | dedup device_name | table device_name
+| outputlookup global_core_device_name_lookup.csv
+"""

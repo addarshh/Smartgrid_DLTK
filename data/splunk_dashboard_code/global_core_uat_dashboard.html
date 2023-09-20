@@ -1,0 +1,314 @@
+<form theme="light">
+  <label>Smart Grid - Global Core UAT</label>
+  <fieldset submitButton="false" autoRun="true"></fieldset>
+  <row>
+    <panel id="mytitle">
+      <title>Syslog Event Groups for Validation</title>
+      <input type="radio" token="Useful_pred" searchWhenChanged="true">
+        <label>Prediction Type</label>
+        <choice value="1">Actionable</choice>
+        <choice value="0">Not Actionable</choice>
+        <choice value="*">All</choice>
+        <default>*</default>
+        <initialValue>*</initialValue>
+        <fieldForLabel>prediction_type_input</fieldForLabel>
+        <fieldForValue>prediction_type_input</fieldForValue>
+      </input>
+      <input type="radio" token="user_label" searchWhenChanged="true">
+        <label>User-Labeled ?</label>
+        <choice value="0, 1, Actionable,&quot;Non Actionable&quot;">Labeled</choice>
+        <choice value="nan">Not Labeled</choice>
+        <choice value="*">All</choice>
+        <default>*</default>
+        <initialValue>*</initialValue>
+        <fieldForLabel>user_label_input</fieldForLabel>
+        <fieldForValue>user_label_input</fieldForValue>
+      </input>
+      <input type="time" token="time_period" searchWhenChanged="true">
+        <label>Time Period</label>
+        <default>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </default>
+        <change>
+          <eval token="time_period.earliest_epoch">if(isnum('earliest'),'earliest',relative_time(now(),'earliest')</eval>
+          <eval token="time_period.latest_epoch">if(isnum('latest'),'latest',relative_time(now(),'latest')</eval>
+        </change>
+      </input>
+      <html>
+        <div style="position: absolute; top: -180px; right: 150px;">
+          <a style="float: left;" href="http://sharepoint.bankofamerica.com/sites/Platypus/SmartGridCS/Shared%20Documents/Phase%202%20-%20Productionalization/Smart%20Grid/SmartGrid%20User%20Manual.pptx?d=we8cb44dc080d4b64a2474db380a497e2" target="blank">About this dashboard</a>
+          <br/>
+          <a style="float: left;" href="http://ah-1064594-001.sdi.corp.bankofamerica.com:8000/en-US/app/search/smart_grid__financial_center_uat" target="blank">Smart Grid - Financial Center Dashboard</a>
+          <br/>
+          <b>Notes</b>
+          <p>Model Score &gt; 0.45 is labeled Actionable</p>
+        </div>
+      </html>
+      <html>
+      <style>
+        .dashboard-row #mytitle .dashboard-panel h2.panel-title {font-size: 30px !important;}
+      </style>
+
+      </html>
+      <table>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| eval group_label=printf("%d",group_label)
+| stats first(user_label) as user_label, first(reason) as reason, first(username) as username, first(feedback) as feedback, values(event_policy_name) as policies, values(device_name) as devices, max(Group_Useful_pred) as Prediction, max(Useful_prob) as max_Useful_prob, min(first_occurrence) as "min_first_occurrence", max(first_occurrence) as "max_first_occurrence", dc(event_id) as "Syslog Events" by group_label
+| search Prediction="$Useful_pred$" AND user_label IN ($user_label$)
+| eval  max_Useful_prob=printf("%.3f", max_Useful_prob)
+| eval min_first_occurrence=substr(min_first_occurrence, 1,19)
+| eval max_first_occurrence=substr(max_first_occurrence, 1,19)
+| eval etime=strptime(max_first_occurrence, "%Y-%m-%d %H:%M:%S")
+| eval mtime=$time_period.earliest_epoch$
+| eval ntime=$time_period.latest_epoch$
+| where etime &gt; mtime and (etime &lt; ntime)
+| replace 0 with "Non Actionable", 1 with Actionable in Prediction
+| replace 0 with "Non Actionable", 1 with Actionable, nan with " " in user_label
+| replace nan with " " in reason
+| sort -"(min_first_occurrence)"
+| rename group_label as "Group Number", user_label as "Validation Label", max_Useful_prob as "Model Score",
+min_first_occurrence as "First Occurrence", max_first_occurrence as "Last Occurrence",
+policies as "Event Policy Names", devices as "Devices", reason as "Reason", username as "User", feedback as Feedback
+| sort -"Group Number"
+| table  "Group Number", "First Occurrence", "Last Occurrence", "Event Policy Names", Devices, "Syslog Events", Prediction, "Model Score", "Validation Label", Reason, User, Feedback</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">5</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">row</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color">
+          <colorPalette type="map">{"$colorPickerToken$":#FF1111}</colorPalette>
+        </format>
+        <drilldown>
+          <set token="grouplabel">$row.Group Number$</set>
+          <unset token="form.user_reason"></unset>
+          <unset token="form.user_relabel"></unset>
+          <unset token="user_reason"></unset>
+          <unset token="user_relabel"></unset>
+          <unset token="user_reason2"></unset>
+          <unset token="user_relabel2"></unset>
+          <unset token="grouplabel2"></unset>
+          <unset token="feedback"></unset>
+          <unset token="form.feedback"></unset>
+          <set token="firstoccurrence">$row.First Occurrence$</set>
+          <set token="user_reason">None</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row depends="$grouplabel$">
+    <panel depends="$grouplabel$" id="EventsPanel">
+      <title>Events in Group $grouplabel$</title>
+      <table>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| dedup event_id
+| search group_label= $grouplabel$
+| eval first_occurrence=substr(first_occurrence, 1,19)
+| sort first_occurrence
+| rename event_id as event_id first_occurrence as "Time" device_name as Device severity as Severity event_policy_name as "Event Policy" group_label as Group_Label message as Message
+| table Time Device Severity "Event Policy" Message</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">row</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel id="ValidationPanel">
+      <title>Validate Event Group</title>
+      <input type="radio" token="user_relabel">
+        <label>Validation Label</label>
+        <choice value="1">Actionable</choice>
+        <choice value="0">Non-Actionable</choice>
+      </input>
+      <input type="dropdown" token="user_reason">
+        <label>Reason</label>
+        <choice value="None">None</choice>
+        <choice value="Critical">Critical</choice>
+        <choice value="Chronic">Chronic</choice>
+        <choice value="Minimal Impact">Minimal Impact</choice>
+        <choice value="Hard Down">Hard Down</choice>
+        <choice value="Interface Flapping">Interface Flapping</choice>
+        <choice value="Other">Other</choice>
+        <default>None</default>
+        <initialValue>None</initialValue>
+      </input>
+      <input type="dropdown" token="username">
+        <label>User</label>
+        <choice value="Jeff Thompson">Jeff Thompson</choice>
+        <choice value="Brandon Wolfe">Brandon Wolfe</choice>
+        <choice value="Kevin Deming">Kevin Deming</choice>
+        <choice value="Ruoh-Yann Huang">Ruoh-Yann Huang</choice>
+        <choice value="Other">Other</choice>
+      </input>
+      <input type="checkbox" token="feedback">
+        <label>Optional feedback</label>
+        <choice value="&quot;Split events&quot;">These events should be split or regrouped</choice>
+        <delimiter> </delimiter>
+      </input>
+      <table depends="$grouplabel$,$user_relabel$,$user_reason$,$username$">
+        <search>
+          <query>| makeresults |eval group_label=$grouplabel$ | eval user_label="$user_relabel$" | eval reason="$user_reason$" | eval submit="Click Me To Submit" | eval test=2 | eval device_type="ion3k" | replace 0 with "Non Actionable", 1 with Actionable in user_label  | table group_label user_label reason submit</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <set token="user_relabel2">$user_relabel$</set>
+          <set token="user_reason2">$user_reason$</set>
+          <set token="grouplabel2">$grouplabel$</set>
+          <set token="firstoccurrence2">$firstoccurrence$</set>
+          <set token="feedback2">$feedback$</set>
+          <set token="username2">$username$</set>
+          <unset token="user_reason"></unset>
+          <unset token="user_relabel"></unset>
+          <unset token="grouplabel"></unset>
+          <unset token="firstoccurrence"></unset>
+          <unset token="feedback"></unset>
+          <unset token="form.user_reason"></unset>
+          <unset token="form.user_relabel"></unset>
+          <unset token="form.feedback"></unset>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row depends="$grouplabel2$">
+    <panel>
+      <title>Event Label Submitted!</title>
+      <table>
+        <search>
+          <query>| makeresults| eval group_label=tonumber("$grouplabel2$") | eval user_label="$user_relabel2$" | eval reason="$user_reason2$" | eval first_occurrence="$firstoccurrence2$" | eval username="$username2$" | eval feedback=$feedback2$ | eval test=3 | eval device_type="global_core"| replace 0 with "Non Actionable", 1 with Actionable in user_label  | collect index=baseline_ph2_test testmode=false addtime=true | table group_label user_label reason username feedback</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel id="title2">
+      <title>Summary Statistics</title>
+      <html>
+      <style>
+        .dashboard-row #title2 .dashboard-panel h2.panel-title {font-size: 30px !important;}
+      </style>
+    </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Number of Event Groups with Prediction of Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core" Useful_pred = 1
+| stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0xf8be34","0xf1813f","0x53a051"]</option>
+        <option name="rangeValues">[0,70,100]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>User Agreed with Model Prediction of Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| eval group_label=printf("%d",group_label)
+| stats first(user_label) as user_label, first(reason) as reason, values(event_policy_name) as policies, values(device_name) as devices, max(Group_Useful_pred) as Prediction, max(Useful_prob) as max_Useful_prob, min(first_occurrence) as "min_first_occurrence", max(first_occurrence) as "max_first_occurrence", dc(event_id) as "Syslog Events" by group_label
+| search Prediction="*" AND user_label IN (0, 1, Actionable,"Non Actionable")
+| search user_label IN (1, Actionable) AND Prediction=1 | stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>User Disagreed with Model Prediction of Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| eval group_label=printf("%d",group_label)
+| stats first(user_label) as user_label, first(reason) as reason, values(event_policy_name) as policies, values(device_name) as devices, max(Group_Useful_pred) as Prediction, max(Useful_prob) as max_Useful_prob, min(first_occurrence) as "min_first_occurrence", max(first_occurrence) as "max_first_occurrence", dc(event_id) as "Syslog Events" by group_label
+| search user_label IN (0, "Non Actionable") AND Prediction=1 | stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Number of Event Groups with Prediction of Non-Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core" Useful_pred = 0
+| stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>User Agreed with Model Prediction of Non-Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| eval group_label=printf("%d",group_label)
+| stats first(user_label) as user_label, first(reason) as reason, values(event_policy_name) as policies, values(device_name) as devices, max(Group_Useful_pred) as Prediction, max(Useful_prob) as max_Useful_prob, min(first_occurrence) as "min_first_occurrence", max(first_occurrence) as "max_first_occurrence", dc(event_id) as "Syslog Events" by group_label
+| search user_label IN (0, "Non Actionable") AND Prediction=0 | stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>User Disagreed with Model Prediction of Non-Actionable</title>
+      <single>
+        <search>
+          <query>index=baseline_ph2_test test=3 device_type="global_core"
+| eval group_label=printf("%d",group_label)
+| stats first(user_label) as user_label, first(reason) as reason, values(event_policy_name) as policies, values(device_name) as devices, max(Group_Useful_pred) as Prediction, max(Useful_prob) as max_Useful_prob, min(first_occurrence) as "min_first_occurrence", max(first_occurrence) as "max_first_occurrence", dc(event_id) as "Syslog Events" by group_label
+| search Prediction="*" AND user_label IN (0, 1, Actionable,"Non Actionable")
+| search user_label IN (1, Actionable) AND Prediction=0 | stats dc(group_label)</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+  </row>
+</form>
